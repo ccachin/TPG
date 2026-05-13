@@ -2,9 +2,8 @@
 """
 Afficheur TPG – Tram 15 direction Nations
 Grille 128×96 dots.
-- Icône tram quand < 1 minute
-- Plein écran avec mise à l'échelle (F11/F/Echap)
-- Jour, mois, heure mis à jour automatiquement chaque seconde
+Plein écran adaptatif : step_x et step_y calculés indépendamment
+pour remplir exactement la fenêtre sans bandes noires.
 """
 
 import tkinter as tk
@@ -23,20 +22,20 @@ API_URL   = ("https://transport.opendata.ch/v1/stationboard"
 # ─── CONFIG GRILLE ───────────────────────────────────────────────────────────
 COLS = 128
 ROWS = 96
-DOT_NORMAL = 5   # taille LED en mode normal
-GAP_NORMAL = 2
+DOT_RATIO = 0.72   # taille du dot = DOT_RATIO × min(step_x, step_y)
 
 # ─── COULEURS ────────────────────────────────────────────────────────────────
 BG_SCREEN = "#0b0b06"
-BG_FRAME  = "#111111"
+BG_FRAME  = "#000000"
 LED_ON    = "#ff8c00"
 LED_RED   = "#ff2200"
+DOT_OFF   = "#1e1c07"
 
 JOURS_FR = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"]
 MOIS_FR  = ["Janvier","Fevrier","Mars","Avril","Mai","Juin",
             "Juillet","Aout","Septembre","Octobre","Novembre","Decembre"]
 
-# ─── GRILLE STATIQUE (15 + Nations×2, cols 0-59) ─────────────────────────────
+# ─── GRILLE STATIQUE ─────────────────────────────────────────────────────────
 STATIC_DATA = {
     2:  [19, 22, 30, 34],
     3:  [19, 22, 30],
@@ -60,41 +59,31 @@ STATIC_DATA = {
 }
 STATIC_GRID = {(c, r) for r, cols in STATIC_DATA.items() for c in cols}
 
-# ─── ICÔNE TRAM (6×7 dots, extraite de l'image Excel) ────────────────────────
+# ─── ICÔNES ──────────────────────────────────────────────────────────────────
 TRAM_ICON = [
-    [0,0,1,1,1,1,0],  # toit
-    [0,1,0,0,0,0,1],  # carrosserie
-    [0,1,0,0,0,0,1],  # fenêtres
-    [0,1,0,0,0,0,1],  # carrosserie
-    [0,1,1,1,1,1,1],  # bas
-    [0,1,1,1,1,1,1],  # bas
-    [0,1,1,0,0,1,1],  # roues
+    [0,0,1,1,1,1,0],
+    [0,1,0,0,0,0,1],
+    [0,1,0,0,0,0,1],
+    [0,1,0,0,0,0,1],
+    [0,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1],
+    [0,1,1,0,0,1,1],
 ]
-TRAM_W = 7
-TRAM_H = 7
+TRAM_W, TRAM_H = 7, 7
 
-# ─── ICÔNE FAUTEUIL ROULANT (5×7 dots, extraite de l'image Excel) ────────────
-# Affiché à gauche des minutes quand le véhicule est accessible PMR.
-# L'API TPG ne fournit pas ce champ directement → configurable via SHOW_WHEELCHAIR.
-# Mettre à False pour masquer, True pour toujours afficher.
 WHEELCHAIR_ICON = [
-    [1,1,0,0,0,0],  # épaules
-    [0,1,0,0,0,0],  # corps
-    [0,1,0,0,0,0],  # corps
-    [0,1,1,1,0,0],  # bras + siège
-    [1,0,0,1,0,0],  # jambe + repose-pied
-    [1,0,0,1,1,0],  # jambe + roue
-    [0,1,1,0,0,0],  # bas roue
+    [1,1,0,0,0,0],
+    [0,1,0,0,0,0],
+    [0,1,0,0,0,0],
+    [0,1,1,1,0,0],
+    [1,0,0,1,0,0],
+    [1,0,0,1,1,0],
+    [0,1,1,0,0,0],
 ]
-WHEELCHAIR_W = 6
-WHEELCHAIR_H = 7
-
-# ─── CONFIG ACCESSIBILITÉ ─────────────────────────────────────────────────────
-# True  = icône fauteuil toujours affichée (trams TPG tous accessibles)
-# False = icône masquée
+WHEELCHAIR_W, WHEELCHAIR_H = 6, 7
 SHOW_WHEELCHAIR = True
 
-# ─── FONTE PROPORTIONNELLE ────────────────────────────────────────────────────
+# ─── FONTE ───────────────────────────────────────────────────────────────────
 FONT = {
     '0': ([0b01110,0b10001,0b10011,0b10101,0b11001,0b10001,0b01110], 5),
     '1': ([0b001,0b011,0b101,0b001,0b001,0b001,0b001], 3),
@@ -106,7 +95,7 @@ FONT = {
     '7': ([0b11111,0b00001,0b00001,0b00010,0b00100,0b01000,0b01000], 5),
     '8': ([0b01110,0b10001,0b10001,0b01110,0b10001,0b10001,0b01110], 5),
     '9': ([0b01110,0b10001,0b10001,0b01111,0b00001,0b10001,0b01110], 5),
-    ':': ([0,0,0,0b1,0,0b1,0], 1),
+    ':': ([0,0,0,1,0,1,0], 1),
     '\x00':([0]*7, 1),
     ' ': ([0]*7, 4),
     'A': ([0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001], 5),
@@ -166,51 +155,52 @@ FONT = {
 
 # ─── CANVAS LED ──────────────────────────────────────────────────────────────
 class LEDCanvas(tk.Canvas):
-    """Canvas dot-matrix LED avec STEP recalculable pour le plein écran."""
+    """
+    Canvas LED dont les step_x et step_y sont indépendants :
+    la grille remplit exactement la zone disponible sans bandes noires.
+    Les dots restent ronds (diamètre = DOT_RATIO × min(step_x, step_y)).
+    """
 
-    def __init__(self, master, step, **kw):
-        self._step = step
-        self._dot  = max(1, step - 2)
-        super().__init__(master,
-                         width=COLS * step,
-                         height=ROWS * step,
-                         bg=BG_SCREEN,
-                         highlightthickness=0, **kw)
-        self._build(step)
+    def __init__(self, master, w, h, **kw):
+        super().__init__(master, width=w, height=h,
+                         bg=BG_SCREEN, highlightthickness=0, **kw)
+        self._items = {}
+        self._dyn   = set()
+        self._sx = 1.0
+        self._sy = 1.0
+        self._dot = 1
+        self._build(w, h)
 
-    def _build(self, step):
-        """(Re)construit toute la grille de dots pour un STEP donné."""
-        self._step = step
-        self._dot  = max(1, step - 2)
+    def _build(self, w, h):
+        """Construit ou reconstruit toute la grille pour une taille w×h."""
+        self._sx  = w / COLS
+        self._sy  = h / ROWS
+        self._dot = max(1, int(min(self._sx, self._sy) * DOT_RATIO))
+        r = self._dot // 2
+
         self.delete("all")
         self._items = {}
-        r = self._dot // 2
-        dot_off = self._make_dot_off()
+        self._dyn   = set()
+
         for row in range(ROWS):
             for col in range(COLS):
-                x = col * step + step // 2
-                y = row * step + step // 2
-                item = self.create_oval(x-r, y-r, x+r, y+r,
-                                        fill=dot_off, outline="")
+                cx = int((col + 0.5) * self._sx)
+                cy = int((row + 0.5) * self._sy)
+                item = self.create_oval(cx-r, cy-r, cx+r, cy+r,
+                                        fill=DOT_OFF, outline="")
                 self._items[(col, row)] = item
-        # Fond statique
+
         for (col, row) in STATIC_GRID:
             if (col, row) in self._items:
                 self.itemconfig(self._items[(col, row)], fill=LED_ON)
-        self._dyn = set()
 
-    def _make_dot_off(self):
-        """Couleur DOT_OFF légèrement visible."""
-        return "#1e1c07"
-
-    def resize(self, step):
-        """Redimensionne le canvas et reconstruit la grille."""
-        self.config(width=COLS * step, height=ROWS * step)
-        self._build(step)
+    def resize(self, w, h):
+        self.config(width=w, height=h)
+        self._build(w, h)
 
     def clear_dynamic(self):
         for key in self._dyn:
-            color = LED_ON if key in STATIC_GRID else self._make_dot_off()
+            color = LED_ON if key in STATIC_GRID else DOT_OFF
             self.itemconfig(self._items[key], fill=color)
         self._dyn.clear()
 
@@ -249,19 +239,15 @@ class LEDCanvas(tk.Canvas):
         self.draw_text(text, cx - self._tw(text) // 2, cy, color)
 
     def draw_tram(self, col_right, row_start, color):
-        """Dessine l'icône tram (6×7) alignée à droite."""
         cx = col_right - TRAM_W + 1
         for r, row in enumerate(TRAM_ICON):
             for c, v in enumerate(row):
-                if v:
-                    self.dyn(cx + c, row_start + r, color)
+                if v: self.dyn(cx + c, row_start + r, color)
 
     def draw_wheelchair(self, col_left, row_start, color):
-        """Dessine l'icône fauteuil roulant (5×7) à une position donnée."""
         for r, row in enumerate(WHEELCHAIR_ICON):
             for c, v in enumerate(row):
-                if v:
-                    self.dyn(col_left + c, row_start + r, color)
+                if v: self.dyn(col_left + c, row_start + r, color)
 
 
 # ─── FETCH API ───────────────────────────────────────────────────────────────
@@ -304,18 +290,21 @@ class TPGWindow(tk.Tk):
         self.configure(bg=BG_FRAME)
         self.resizable(True, True)
         self._fullscreen = False
-        self._step = DOT_NORMAL + GAP_NORMAL  # 7
+        self._resize_job = None
 
-        self._frame = tk.Frame(self, bg=BG_FRAME)
-        self._frame.pack(expand=True, fill="both")
+        # Taille initiale : grille carrée avec step=7
+        iw = COLS * 7
+        ih = ROWS * 7
+        self.geometry(f"{iw}x{ih}")
 
-        self.cv = LEDCanvas(self._frame, self._step)
-        self.cv.pack(expand=True)
+        self.cv = LEDCanvas(self, iw, ih)
+        self.cv.place(x=0, y=0)   # plaqué en haut-gauche, redimensionné dynamiquement
 
-        self.bind("<F11>",    lambda e: self._toggle_fs())
-        self.bind("<f>",      lambda e: self._toggle_fs())
-        self.bind("<F>",      lambda e: self._toggle_fs())
-        self.bind("<Escape>", lambda e: self._exit_fs())
+        self.bind("<F11>",       lambda e: self._toggle_fs())
+        self.bind("<f>",         lambda e: self._toggle_fs())
+        self.bind("<F>",         lambda e: self._toggle_fs())
+        self.bind("<Escape>",    lambda e: self._exit_fs())
+        self.bind("<Configure>", lambda e: self._on_resize(e))
 
         self._deps  = []
         self._error = None
@@ -325,29 +314,27 @@ class TPGWindow(tk.Tk):
     def _toggle_fs(self):
         self._fullscreen = not self._fullscreen
         self.attributes("-fullscreen", self._fullscreen)
-        self.after(50, self._apply_scale)  # attendre que la fenêtre se redimensionne
 
     def _exit_fs(self):
         self._fullscreen = False
         self.attributes("-fullscreen", False)
-        self.after(50, self._apply_scale)
+
+    def _on_resize(self, event):
+        if event.widget is not self:
+            return
+        if self._resize_job:
+            self.after_cancel(self._resize_job)
+        self._resize_job = self.after(80, self._apply_scale)
 
     def _apply_scale(self):
-        """Calcule le STEP optimal pour remplir la fenêtre."""
-        if self._fullscreen:
-            w = self.winfo_screenwidth()
-            h = self.winfo_screenheight()
-        else:
-            w = COLS * (DOT_NORMAL + GAP_NORMAL) + 24
-            h = ROWS * (DOT_NORMAL + GAP_NORMAL) + 24
-            self.geometry(f"{w}x{h}")
-
-        step = min(w // COLS, h // ROWS)
-        step = max(2, step)
-        if step != self._step:
-            self._step = step
-            self.cv.resize(step)
-            self._draw()  # redessiner immédiatement
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 10 or h < 10:
+            return
+        # Le canvas prend toute la fenêtre — step_x et step_y indépendants
+        self.cv.place(x=0, y=0, width=w, height=h)
+        self.cv.resize(w, h)
+        self._draw()
 
     def _tick(self):
         self._draw()
@@ -361,21 +348,16 @@ class TPGWindow(tk.Tk):
         self.after(REFRESH_S * 1000, self._refresh)
 
     def _draw_dep(self, dep_idx, row_start):
-        """Dessine les minutes ou l'icône tram + fauteuil roulant si accessible."""
-        cv = self.cv
+        cv  = self.cv
         now = datetime.now()
         if dep_idx >= len(self._deps):
             return
         d     = self._deps[dep_idx]
         mins  = int((d["real"] - now).total_seconds() / 60)
         color = LED_RED if d["delay"] > 0 else LED_ON
-
-        # Icône fauteuil roulant à gauche des minutes (col 60)
         if SHOW_WHEELCHAIR:
             cv.draw_wheelchair(99, row_start, color)
-
         if mins <= 0:
-            # Icône tram à droite quand le tram est imminent
             cv.draw_tram(126, row_start, color)
         else:
             cv.draw_text_right(str(mins), 126, row_start, color)
@@ -384,25 +366,16 @@ class TPGWindow(tk.Tk):
         cv  = self.cv
         now = datetime.now()
         cv.clear_dynamic()
-
-        # ── Minutes / Tram départ 1 (rows 2-8) ───────────────────────────
         self._draw_dep(0, 2)
-
-        # ── Minutes / Tram départ 2 (rows 14-20) ─────────────────────────
         self._draw_dep(1, 14)
-
-        # ── Date (rows 76-82) ─────────────────────────────────────────────
         jour = JOURS_FR[now.weekday()]
         mois = MOIS_FR[now.month - 1]
         cv.draw_text_center(f"{jour} {now.day} {mois}", 63, 76, LED_ON)
-
-        # ── Heure (rows 86-92) ────────────────────────────────────────────
         sep = ":" if now.second % 2 == 0 else "\x00"
         cv.draw_text_center(now.strftime("%H") + sep + now.strftime("%M"),
                             63, 86, LED_ON)
 
 
-# ─── MAIN ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = TPGWindow()
     app.mainloop()
