@@ -40,8 +40,8 @@ Simulation fidèle d'un panneau d'arrêt TPG (Transports Publics Genevois) en Py
 ### Lancement
 
 ```bash
-git clone https://github.com/votre-utilisateur/tpg-afficheur.git
-cd tpg-afficheur
+git clone https://github.com/ccachin/TPG.git
+cd TPG
 python3 tpg_led.py
 ```
 
