@@ -1,6 +1,6 @@
 # 🚋 TPG Stop Display – Panneau d'arrêt sur écran
 
-Simulation fidèle d'un panneau d'arrêt TPG (Transports Publics Genevois) en Python, avec données en temps réel, rendu dot-matrix authentique et affichage plein écran adaptatif.
+Reproduit fidèlement l'affichage des panneaux d'arrêt TPG (Transports Publics Genevois) sur n'importe quel écran — de la fenêtre de bureau au grand écran en plein écran. Rendu dot-matrix authentique, données en temps réel, adapté à toutes les résolutions.
 
 ---
 
