@@ -19,6 +19,13 @@ REFRESH_S = 30
 API_URL   = ("https://transport.opendata.ch/v1/stationboard"
              f"?station={urllib.parse.quote(STATION)}&limit={LIMIT}")
 
+# ─── SIMULATION (pour tests sans réseau) ────────────────────────────────────
+# Mettre SIMULATE = True pour activer les données fictives
+# DEP1 et DEP2 : minutes restantes (0 = tram imminent), delay = retard en minutes
+SIMULATE = False
+SIM_DEP1 = {"mins": 1,  "delay": 0}   # ex: 1 min, à l'heure
+SIM_DEP2 = {"mins": 6,  "delay": 3}   # ex: 6 min, 3 min de retard
+
 # ─── CONFIG GRILLE ───────────────────────────────────────────────────────────
 COLS = 128
 ROWS = 96
@@ -27,35 +34,51 @@ DOT_RATIO = 0.72   # taille du dot = DOT_RATIO × min(step_x, step_y)
 # ─── COULEURS ────────────────────────────────────────────────────────────────
 BG_SCREEN = "#0b0b06"
 BG_FRAME  = "#000000"
-LED_ON    = "#ff8c00"
-LED_RED   = "#ff2200"
-DOT_OFF   = "#1e1c07"
+LED_ON    = "#ffaa00"
+LED_RED   = "#ff4400"
+DOT_OFF   = "#2a2608"
 
 JOURS_FR = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"]
 MOIS_FR  = ["Janvier","Fevrier","Mars","Avril","Mai","Juin",
             "Juillet","Aout","Septembre","Octobre","Novembre","Decembre"]
 
 # ─── GRILLE STATIQUE ─────────────────────────────────────────────────────────
+# Pixels permanents : uniquement le "15" (cols 0-18)
+# "Nations" est maintenant dynamique pour pouvoir afficher "En retard"
 STATIC_DATA = {
-    2:  [19, 22, 30, 34],
-    3:  [19, 22, 30],
-    4:  [19, 20, 22, 25, 26, 29, 30, 31, 32, 34, 37, 38, 41, 42, 43, 47, 48, 49],
-    5:  [5, 6, 8, 9, 10, 11, 12, 13, 14, 19, 21, 22, 27, 30, 34, 36, 39, 41, 44, 46],
-    6:  [4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 19, 22, 25, 26, 27, 30, 34, 36, 39, 41, 44, 47, 48],
-    7:  [3, 4, 5, 6, 8, 9, 19, 22, 24, 27, 30, 34, 36, 39, 41, 44, 49],
-    8:  [2, 3, 4, 5, 6, 8, 9, 19, 22, 25, 26, 27, 31, 32, 34, 37, 38, 41, 44, 46, 47, 48],
+    5:  [5, 6, 8, 9, 10, 11, 12, 13, 14],
+    6:  [4, 5, 6, 8, 9, 10, 11, 12, 13, 14],
+    7:  [3, 4, 5, 6, 8, 9],
+    8:  [2, 3, 4, 5, 6, 8, 9],
     9:  [1, 2, 3, 5, 6, 8, 9],
     10: [5, 6, 8, 9, 10, 11, 12, 13],
     11: [5, 6, 8, 9, 10, 11, 12, 13, 14],
     12: [5, 6, 13, 14],
     13: [5, 6, 13, 14],
-    14: [5, 6, 13, 14, 19, 22, 30, 34],
-    15: [5, 6, 8, 9, 13, 14, 19, 22, 30],
-    16: [5, 6, 8, 9, 10, 11, 12, 13, 14, 19, 20, 22, 25, 26, 29, 30, 31, 32, 34, 37, 38, 41, 42, 43, 47, 48, 49],
-    17: [5, 6, 9, 10, 11, 12, 13, 19, 21, 22, 27, 30, 34, 36, 39, 41, 44, 46],
-    18: [19, 22, 25, 26, 27, 30, 34, 36, 39, 41, 44, 47, 48],
-    19: [19, 22, 24, 27, 30, 34, 36, 39, 41, 44, 49],
-    20: [19, 22, 25, 26, 27, 31, 32, 34, 37, 38, 41, 44, 46, 47, 48],
+    14: [5, 6, 13, 14],
+    15: [5, 6, 8, 9, 13, 14],
+    16: [5, 6, 8, 9, 10, 11, 12, 13, 14],
+    17: [5, 6, 9, 10, 11, 12, 13],
+}
+
+# Pixels "Nations" pour chaque départ (col 19-59, dynamiques)
+NATIONS_DEP = {
+    1: {(c,r) for r,cols in {
+        2:[19,22,30,34], 3:[19,22,30],
+        4:[19,20,22,25,26,29,30,31,32,34,37,38,41,42,43,47,48,49],
+        5:[19,21,22,27,30,34,36,39,41,44,46],
+        6:[19,22,25,26,27,30,34,36,39,41,44,47,48],
+        7:[19,22,24,27,30,34,36,39,41,44,49],
+        8:[19,22,25,26,27,31,32,34,37,38,41,44,46,47,48],
+    }.items() for c in cols},
+    2: {(c,r) for r,cols in {
+        14:[19,22,30,34], 15:[19,22,30],
+        16:[19,20,22,25,26,29,30,31,32,34,37,38,41,42,43,47,48,49],
+        17:[19,21,22,27,30,34,36,39,41,44,46],
+        18:[19,22,25,26,27,30,34,36,39,41,44,47,48],
+        19:[19,22,24,27,30,34,36,39,41,44,49],
+        20:[19,22,25,26,27,31,32,34,37,38,41,44,46,47,48],
+    }.items() for c in cols},
 }
 STATIC_GRID = {(c, r) for r, cols in STATIC_DATA.items() for c in cols}
 
@@ -153,6 +176,23 @@ FONT = {
 }
 
 
+# ─── FONTE TPG 4×7 (extraite des pixels CSV, même style que "Nations") ──────────
+# Utilisée pour "Nations" et "Retard" afin d'avoir une typo uniforme
+FONT_TPG = {
+    'N': ([0b1001,0b1001,0b1101,0b1011,0b1001,0b1001,0b1001], 4),
+    'a': ([0b0000,0b0000,0b0110,0b0001,0b0111,0b1001,0b0111], 4),
+    't': ([0b0100,0b0100,0b1111,0b0100,0b0100,0b0100,0b0011], 4),
+    'i': ([0b1,0b0,0b1,0b1,0b1,0b1,0b1], 1),
+    'o': ([0b0000,0b0000,0b0110,0b1001,0b1001,0b1001,0b0110], 4),
+    'n': ([0b0000,0b0000,0b1110,0b1001,0b1001,0b1001,0b1001], 4),
+    's': ([0b0000,0b0000,0b0111,0b1000,0b0110,0b0001,0b1110], 4),
+    'R': ([0b1110,0b1001,0b1001,0b1110,0b1010,0b1001,0b1001], 4),
+    'e': ([0b0000,0b0000,0b0110,0b1001,0b1111,0b1000,0b0110], 4),
+    'r': ([0b0000,0b0000,0b1011,0b1100,0b1000,0b1000,0b1000], 4),
+    'd': ([0b0001,0b0001,0b0111,0b1001,0b1001,0b1001,0b0111], 4),
+    ' ': ([0b0000]*7, 3),
+}
+
 # ─── CANVAS LED ──────────────────────────────────────────────────────────────
 class LEDCanvas(tk.Canvas):
     """
@@ -193,22 +233,38 @@ class LEDCanvas(tk.Canvas):
         for (col, row) in STATIC_GRID:
             if (col, row) in self._items:
                 self.itemconfig(self._items[(col, row)], fill=LED_ON)
+        self._cur_state = {k: LED_ON for k in STATIC_GRID if k in self._items}
+        self._new_state = {}
 
     def resize(self, w, h):
         self.config(width=w, height=h)
         self._build(w, h)
 
-    def clear_dynamic(self):
-        for key in self._dyn:
-            color = LED_ON if key in STATIC_GRID else DOT_OFF
-            self.itemconfig(self._items[key], fill=color)
-        self._dyn.clear()
+    def begin_frame(self):
+        self._new_state = {}
+
+    def commit_frame(self):
+        new = self._new_state
+        cur = self._cur_state
+        cfg = self.itemconfig
+        items = self._items
+        for key, color in new.items():
+            if cur.get(key) != color:
+                cfg(items[key], fill=color)
+                cur[key] = color
+        for key in list(cur):
+            if key not in new:
+                color = LED_ON if key in STATIC_GRID else DOT_OFF
+                if cur[key] != color:
+                    cfg(items[key], fill=color)
+                cur[key] = color
+        self._new_state = {}
+
+    def clear_dynamic(self): pass
 
     def dyn(self, col, row, color):
         if 0 <= col < COLS and 0 <= row < ROWS:
-            key = (col, row)
-            self._dyn.add(key)
-            self.itemconfig(self._items[key], fill=color)
+            self._new_state[(col, row)] = color
 
     # ── Fonte ──────────────────────────────────────────────────────────────
     def _tw(self, text):
@@ -238,6 +294,17 @@ class LEDCanvas(tk.Canvas):
     def draw_text_center(self, text, cx, cy, color):
         self.draw_text(text, cx - self._tw(text) // 2, cy, color)
 
+    def draw_text_tpg(self, text, cx, cy, color):
+        """Dessine avec la fonte TPG 4×7 (même style que Nations)."""
+        x = cx
+        for ch in text:
+            bm, w = FONT_TPG.get(ch, ([0]*7, 4))
+            for r, bits in enumerate(bm):
+                for c in range(w):
+                    if bits & (1 << (w - 1 - c)):
+                        self.dyn(x + c, cy + r, color)
+            x += w + 1
+
     def draw_tram(self, col_right, row_start, color):
         cx = col_right - TRAM_W + 1
         for r, row in enumerate(TRAM_ICON):
@@ -252,6 +319,14 @@ class LEDCanvas(tk.Canvas):
 
 # ─── FETCH API ───────────────────────────────────────────────────────────────
 def fetch_departures():
+    if SIMULATE:
+        now = datetime.now()
+        deps = []
+        for sim in [SIM_DEP1, SIM_DEP2]:
+            real = now + timedelta(minutes=sim["mins"])
+            deps.append({"real": real, "delay": sim["delay"],
+                         "mins": sim["mins"]})
+        return deps, None
     try:
         req = urllib.request.Request(
             API_URL, headers={"User-Agent": "Mozilla/5.0 (TPG-Display/1.0)"})
@@ -306,9 +381,11 @@ class TPGWindow(tk.Tk):
         self.bind("<Escape>",    lambda e: self._exit_fs())
         self.bind("<Configure>", lambda e: self._on_resize(e))
 
-        self._deps  = []
-        self._error = None
+        self._deps      = []
+        self._error     = None
+        self._blink_phase = 0   # 0,1=allumé 2=éteint (cycle 333ms×3=1s)
         self._tick()
+        self._blink_tick()
         self._refresh()
 
     def _toggle_fs(self):
@@ -340,6 +417,12 @@ class TPGWindow(tk.Tk):
         self._draw()
         self.after(1000, self._tick)
 
+    def _blink_tick(self):
+        """Clignotement tram : allumé 2/3 du temps, éteint 1/3."""
+        self._blink_phase = (self._blink_phase + 1) % 3
+        self._draw()
+        self.after(333, self._blink_tick)
+
     def _refresh(self):
         def worker():
             deps, err = fetch_departures()
@@ -347,33 +430,51 @@ class TPGWindow(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
         self.after(REFRESH_S * 1000, self._refresh)
 
-    def _draw_dep(self, dep_idx, row_start):
+    def _draw_dep(self, dep_idx, row_start, blink_on):
         cv  = self.cv
         now = datetime.now()
         if dep_idx >= len(self._deps):
+            # Pas de départ : afficher Nations en dim
+            for (c, r) in NATIONS_DEP[dep_idx + 1]:
+                cv.dyn(c, r, DOT_OFF)
             return
         d     = self._deps[dep_idx]
         mins  = int((d["real"] - now).total_seconds() / 60)
         color = LED_RED if d["delay"] > 0 else LED_ON
+
+        # Destination : même fonte pour "Nations" et "Retard"
+        # On efface toujours les pixels CSV de Nations (ils sont dans NATIONS_DEP)
+        # et on redessine via draw_text pour garantir une fonte uniforme
+        for (c, r) in NATIONS_DEP[dep_idx + 1]:
+            cv.dyn(c, r, DOT_OFF)
+        if d["delay"] > 0:
+            cv.draw_text_tpg("Retard", 19, row_start, LED_RED)
+        else:
+            cv.draw_text_tpg("Nations", 19, row_start, LED_ON)
+
         if SHOW_WHEELCHAIR:
             cv.draw_wheelchair(99, row_start, color)
         if mins <= 0:
-            cv.draw_tram(126, row_start, color)
+            if blink_on:
+                cv.draw_tram(126, row_start, color)
         else:
             cv.draw_text_right(str(mins), 126, row_start, color)
 
     def _draw(self):
         cv  = self.cv
         now = datetime.now()
-        cv.clear_dynamic()
-        self._draw_dep(0, 2)
-        self._draw_dep(1, 14)
+        blink_on = self._blink_phase < 2  # phases 0,1=allumé / phase 2=éteint
+        cv.begin_frame()
+        self._draw_dep(0, 2, blink_on)
+        self._draw_dep(1, 14, blink_on)
         jour = JOURS_FR[now.weekday()]
         mois = MOIS_FR[now.month - 1]
         cv.draw_text_center(f"{jour} {now.day} {mois}", 63, 76, LED_ON)
+        # ':' clignote à 4Hz avec le même état que le tram
         sep = ":" if now.second % 2 == 0 else "\x00"
         cv.draw_text_center(now.strftime("%H") + sep + now.strftime("%M"),
                             63, 86, LED_ON)
+        cv.commit_frame()
 
 
 if __name__ == "__main__":
