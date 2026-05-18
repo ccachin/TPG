@@ -1,4 +1,4 @@
-# 🚋 Afficheur TPG – Panneau LED dot-matrix
+# 🚋 Simulation Afficheur TPG
 
 Simulation fidèle d'un panneau d'arrêt TPG (Transports Publics Genevois) en Python, avec données en temps réel, rendu dot-matrix authentique et affichage plein écran adaptatif.
 
