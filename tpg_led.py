@@ -25,7 +25,7 @@ API_URL   = ("https://transport.opendata.ch/v1/stationboard"
 # ─── SIMULATION (pour tests sans réseau) ────────────────────────────────────
 # Mettre SIMULATE = True pour activer les données fictives
 # DEP1 et DEP2 : minutes restantes (0 = tram imminent), delay = retard en minutes
-SIMULATE = True
+SIMULATE = False
 SIM_DEPS = [
     {"mins": 17, "delay": 0, "line": "14", "dest": "Bernex-Vailly"},
     {"mins": 35, "delay": 0, "line": "14", "dest": "Bernex-Vailly"},
