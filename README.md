@@ -1,51 +1,55 @@
-# 🚋 TPG Stop Display – Panneau d'arrêt sur écran
+# 🚋 TPG Display — Panneau d'arrêt sur écran
 
-Reproduit fidèlement l'affichage des panneaux d'arrêt TPG (Transports Publics Genevois) sur n'importe quel écran — de la fenêtre de bureau au grand écran en plein écran. Rendu dot-matrix authentique, données en temps réel, adapté à toutes les résolutions.
+Reproduit fidèlement l'affichage des panneaux d'arrêt TPG (Transports Publics Genevois) sur n'importe quel écran. Rendu dot-matrix authentique, données en temps réel, sélection de l'arrêt sur carte interactive.
+
+| Sélecteur d'arrêt | Panneau LED |
+|:-----------------:|:-----------:|
+| ![Carte de sélection](map.png) | ![Panneau en situation](preview.png) |
 
 ---
 
 ## ✨ Fonctionnalités
 
-- **Rendu dot-matrix authentique** — grille de 128×96 LEDs simulées, pixels ronds, espacement adaptatif
-- **Données en temps réel** — horaires du tram 15 (ZIPLO → Nations) via l'API [transport.opendata.ch](https://transport.opendata.ch)
-- **Retard affiché** — "Retard" s'affiche à la place de la destination en rouge quand le tram est en retard
-- **Icône tram** — remplace les minutes quand l'arrivée est imminente (< 1 min), avec clignotement
-- **Icône accessibilité PMR** — fauteuil roulant affiché (configurable)
-- **Plein écran adaptatif** — remplit exactement la fenêtre quelle que soit la résolution ou le ratio d'écran (16:9, 4:3, carré…)
-- **Horloge temps réel** — date et heure mises à jour chaque seconde, deux-points clignotants
-- **Mode simulation** — pour tester les différents états (retard, arrivée imminente) sans réseau
-- **Optimisé Raspberry Pi** — rendu différentiel (seuls les pixels modifiés sont redessinés)
+- **Carte interactive** — sélection de l'arrêt et du quai directement sur une carte OpenStreetMap
+- **Rendu dot-matrix authentique** — fonte et proportions extraites pixel par pixel des vrais panneaux TPG
+- **Toutes les lignes** — affiche tous les départs de l'arrêt sélectionné, groupés par ligne
+- **2 départs par ligne** — numéro centré entre les deux destinations, comme le vrai panneau
+- **Données en temps réel** — via l'API open source [transport.opendata.ch](https://transport.opendata.ch)
+- **Plein écran adaptatif** — remplit exactement l'écran sans bandes noires, quel que soit le ratio
+- **Icônes authentiques** — fauteuil roulant et tram extraits des grilles CSV originales
+- **Optimisé Raspberry Pi** — rendu différentiel, seuls les pixels modifiés sont redessinés
+- **Mode simulation** — pour tester sans réseau
 
 ---
 
-## 📸 États de l'afficheur
+## 🚀 Installation en une commande
 
-| État | Description |
-|------|-------------|
-| Chiffre orange | Minutes restantes avant l'arrivée |
-| Chiffre rouge | Minutes restantes, tram en retard |
-| "Retard" rouge | Destination remplacée quand le tram est en retard |
-| Icône tram clignotante | Arrivée imminente (< 1 minute) |
-
----
-
-## 🛠 Installation
-
-### Prérequis
-
-- Python 3.7+
-- `tkinter` (inclus dans Python standard sur Windows et macOS ; sur Linux/Raspberry Pi OS : `sudo apt install python3-tk`)
-- Connexion internet (pour les données en temps réel)
-
-### Lancement
+### Raspberry Pi / Linux
 
 ```bash
 git clone https://github.com/ccachin/TPG.git
 cd TPG
-python3 tpg_led.py
+bash install.sh
 ```
 
-Aucune dépendance externe — uniquement la bibliothèque standard Python.
+### Windows
+
+```
+git clone https://github.com/ccachin/TPG.git
+cd TPG
+install.bat
+```
+
+Le script installe automatiquement toutes les dépendances, crée un raccourci sur le bureau, et propose le démarrage automatique sur Raspberry Pi.
+
+---
+
+## ▶ Utilisation
+
+1. Lancer `tpg_selector.py` (ou double-cliquer sur le raccourci bureau)
+2. Naviguer sur la carte et cliquer sur un arrêt
+3. Choisir le bon côté de la route (quai orange ou bleu)
+4. L'afficheur se lance avec toutes les lignes de ce quai
 
 ---
 
@@ -54,78 +58,79 @@ Aucune dépendance externe — uniquement la bibliothèque standard Python.
 | Touche | Action |
 |--------|--------|
 | `F11` ou `F` | Basculer plein écran |
+| `S` | Retour au sélecteur d'arrêt |
 | `Échap` | Quitter le plein écran |
 
 ---
 
 ## ⚙️ Configuration
 
-Toutes les options se trouvent en haut du fichier `tpg_led.py` :
+En haut de `tpg_led.py` :
 
 ```python
-# Station et ligne
-STATION   = "Plan-les-Ouates,ZIPLO"   # Nom de la station
-LINE      = "15"                        # Numéro de ligne
-DIRECTION = "Nations"                   # Destination filtrée
-REFRESH_S = 30                          # Intervalle de rafraîchissement API (secondes)
-
-# Accessibilité
-SHOW_WHEELCHAIR = True   # Afficher l'icône fauteuil roulant
-
-# Apparence
-DOT_RATIO = 0.72   # Taille des LEDs (ratio par rapport à l'espacement)
+SHOW_WHEELCHAIR = True   # Icône fauteuil roulant
+DOT_RATIO       = 0.72   # Taille des LEDs
+REFRESH_S       = 30     # Rafraîchissement API (secondes)
 ```
 
 ### Mode simulation
 
-Pour tester sans réseau ou simuler un retard :
-
 ```python
 SIMULATE = True
-SIM_DEP1 = {"mins": 0, "delay": 0}   # Tram imminent → icône clignotante
-SIM_DEP2 = {"mins": 8, "delay": 3}   # 8 min, retard 3 min → rouge + "Retard"
+SIM_DEPS = [
+    {"mins": 17, "delay": 0, "line": "14", "dest": "Bernex-Vailly"},
+    {"mins": 35, "delay": 0, "line": "14", "dest": "Bernex-Vailly"},
+    {"mins": 29, "delay": 0, "line": "18", "dest": "Palettes"},
+    {"mins": 39, "delay": 0, "line": "18", "dest": "Palettes"},
+]
 ```
 
 ---
 
-## 🔌 API utilisée
+## 📁 Fichiers
 
-[transport.opendata.ch](https://transport.opendata.ch) — API open source des transports publics suisses, gratuite et sans clé d'authentification.
+| Fichier | Rôle |
+|---------|------|
+| `tpg_selector.py` | Sélection de l'arrêt sur carte — **point d'entrée** |
+| `tpg_led.py` | Afficheur LED dot-matrix |
+| `install.sh` | Installation automatique Linux/Pi |
+| `install.bat` | Installation automatique Windows |
+| `start.sh` | Lancement rapide (créé par install.sh) |
 
-Exemple de requête :
-```
-https://transport.opendata.ch/v1/stationboard?station=Plan-les-Ouates,ZIPLO&limit=20
-```
+---
+
+## 🔌 API
+
+[transport.opendata.ch](https://transport.opendata.ch) — gratuite, sans clé d'authentification.
 
 ---
 
 ## 🖥 Testé sur
 
-- Windows 11
 - Raspberry Pi 400 (Raspberry Pi OS)
+- Windows 11
 
 ---
 
-## 🏗 Architecture technique
+## 🏗 Architecture
 
 ```
-tpg_led.py
-├── STATIC_DATA     — Pixels permanents du "15" (extraits d'une grille Excel pixel par pixel)
-├── NATIONS_DEP     — Pixels de la destination (dynamiques pour afficher "Retard")
-├── FONT_TPG        — Fonte 4×7 extraite fidèlement des panneaux TPG réels
-├── FONT            — Fonte 5×7 pour la date et l'heure
-├── LEDCanvas       — Canvas tkinter avec rendu différentiel (diff frame-to-frame)
-├── fetch_departures— Appel API avec parsing des données temps réel
-└── TPGWindow       — Fenêtre principale, gestion plein écran et boucle de rendu
+tpg_selector.py   Carte OSM native (tkinter Canvas + Pillow)
+    │              Sélection arrêt → quai → lance tpg_led.py
+    ▼
+tpg_led.py        Afficheur LED
+    ├── THICK      Fonte épaisse 7-8×13 (numéros de ligne)
+    ├── FONT_TPG   Fonte 4×7 (destinations, extraite des panneaux réels)
+    ├── FONT       Fonte 5×7 (date, heure)
+    ├── LEDCanvas  Rendu différentiel (begin_frame / commit_frame)
+    └── TPGWindow  Plein écran adaptatif (step_x ≠ step_y)
 ```
-
-**Rendu différentiel** : à chaque frame, seuls les pixels dont la couleur a changé sont mis à jour via `itemconfig()`, réduisant les appels de ~12 000 à ~50 par frame — essentiel pour la fluidité sur Raspberry Pi.
 
 ---
 
 ## 📄 Licence
 
-MIT — libre d'utilisation, de modification et de distribution.
+MIT
 
 ---
 
