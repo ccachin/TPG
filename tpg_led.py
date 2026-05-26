@@ -25,7 +25,7 @@ API_URL   = ("https://transport.opendata.ch/v1/stationboard"
 # ─── SIMULATION (pour tests sans réseau) ────────────────────────────────────
 # Mettre SIMULATE = True pour activer les données fictives
 # DEP1 et DEP2 : minutes restantes (0 = tram imminent), delay = retard en minutes
-SIMULATE = False
+SIMULATE = True
 SIM_DEPS = [
     {"mins": 17, "delay": 0, "line": "14", "dest": "Bernex-Vailly"},
     {"mins": 35, "delay": 0, "line": "14", "dest": "Bernex-Vailly"},
@@ -283,7 +283,7 @@ class LEDCanvas(tk.Canvas):
         """Construit ou reconstruit toute la grille pour une taille w×h."""
         self._sx  = w / COLS
         self._sy  = h / ROWS
-        self._dot = max(1, int(min(self._sx, self._sy) * DOT_RATIO))
+        self._dot = max(1, int(((self._sx + self._sy) / 2) * DOT_RATIO))
         r = self._dot // 2
 
         self.delete("all")
@@ -539,6 +539,7 @@ class TPGWindow(tk.Tk):
         self._deps      = []
         self._error     = None
         self._blink_phase = 0   # 0,1=allumé 2=éteint (cycle 333ms×3=1s)
+        self._blink_job   = None  # référence au job after() pour annulation
         self._tick()
         self._blink_tick()
         self._refresh()
@@ -585,20 +586,28 @@ class TPGWindow(tk.Tk):
         h = self.winfo_height()
         if w < 10 or h < 10:
             return
-        # Le canvas prend toute la fenêtre — step_x et step_y indépendants
         self.cv.place(x=0, y=0, width=w, height=h)
         self.cv.resize(w, h)
         self._draw()
+        # Réinitialiser le clignotement pour éviter les rafales
+        self._reset_blink()
 
     def _tick(self):
         self._draw()
         self.after(1000, self._tick)
 
     def _blink_tick(self):
-        """Clignotement tram : allumé 2/3 du temps, éteint 1/3."""
-        self._blink_phase = (self._blink_phase + 1) % 3
+        """Clignotement tram : 500ms allumé / 500ms éteint."""
+        self._blink_phase = 1 - self._blink_phase  # bascule entre 0 et 1
         self._draw()
-        self.after(333, self._blink_tick)
+        self._blink_job = self.after(500, self._blink_tick)
+
+    def _reset_blink(self):
+        """Annule et relance le blink pour éviter les rafales après resize."""
+        if self._blink_job:
+            self.after_cancel(self._blink_job)
+        self._blink_phase = 0
+        self._blink_job = self.after(500, self._blink_tick)
 
     def _refresh(self):
         def worker():
@@ -622,7 +631,7 @@ class TPGWindow(tk.Tk):
         INTRA_GAP = 0    # pas de gap entre 2 destinations de la même ligne
 
         NUM_COL_RIGHT = 17   # numéro aligné à droite ici
-        DEST_COL      = 20   # destination
+        DEST_COL      = 19   # destination
         WHEEL_COL     = 107  # fauteuil roulant
         MIN_COL_RIGHT = 126  # minutes
 
@@ -659,7 +668,7 @@ class TPGWindow(tk.Tk):
     def _draw(self):
         cv  = self.cv
         now = datetime.now()
-        blink_on = self._blink_phase < 2
+        blink_on = self._blink_phase == 0  # 0=allumé, 1=éteint
         cv.begin_frame()
 
         # Grouper les départs par ligne (max 2 par ligne)
@@ -675,7 +684,7 @@ class TPGWindow(tk.Tk):
         # Layout : ROW_H=9, INTRA_GAP=0, INTER_GAP=5
         ROW_H      = 9
         INTRA_GAP  = 0
-        INTER_GAP  = 4
+        INTER_GAP  = 5
         row        = 2
 
         for line_num, deps in groups.items():
